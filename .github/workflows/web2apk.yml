@@ -530,7 +530,8 @@ jobs:
           # Fix gradle-wrapper.properties
           if [ -f "android/gradle/wrapper/gradle-wrapper.properties" ]; then
             echo "📝 Updating gradle-wrapper.properties..."
-            sed -i 's/gradle-[0-9.]*-all.zip/gradle-8.7-all.zip/g' android/gradle/wrapper/gradle-wrapper.properties
+            sed -i 's/gradle-[0-9.]*-all.zip/gradle-9.0.1-all.zip/g' android/gradle/wrapper/gradle-wrapper.properties
+            sed -i 's/gradle-[0-9.]*-bin.zip/gradle-9.1.0-bin.zip/g' android/gradle/wrapper/gradle-wrapper.properties
             echo "✅ gradle-wrapper.properties updated!"
           fi
           
