@@ -16,13 +16,20 @@ on:
 jobs:
   build:
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     steps:
+      # =========================
+      # SETUP JAVA 21 (bukan 17)
+      # =========================
       - name: Setup Java
         uses: actions/setup-java@v4
         with:
           distribution: temurin
-          java-version: '17'
+          java-version: '21'  # ← UPDATE dari 17 ke 21
 
+      # =========================
+      # SETUP FLUTTER
+      # =========================
       - name: Setup Flutter
         uses: subosito/flutter-action@v2
         with:
@@ -30,12 +37,18 @@ jobs:
           channel: stable
           cache: true
 
+      # =========================
+      # CREATE FLUTTER PROJECT
+      # =========================
       - name: Create Flutter Project
         run: |
           APP_NAME="${{ github.event.inputs.app_name }}"
           PKG=$(echo "$APP_NAME" | tr '[:upper:]' '[:lower:]' | tr ' ' '_' | tr -cd '[:alnum:]_')
           flutter create --org com.webapk --project-name "$PKG" myapp
 
+      # =========================
+      # ADD DEPENDENCIES
+      # =========================
       - name: Add Assets and Dependencies
         run: |
           cd myapp
@@ -43,10 +56,12 @@ jobs:
           flutter pub add flutter_launcher_icons
           flutter pub add connectivity_plus
 
-          # Menambahkan konfigurasi assets ke baris paling bawah untuk menghindari error indentasi YAML
           echo "  assets:" >> pubspec.yaml
           echo "    - assets/icon/" >> pubspec.yaml
 
+      # =========================
+      # WRITE main.dart
+      # =========================
       - name: Write main.dart
         run: |
           APP_NAME="${{ github.event.inputs.app_name }}"
@@ -411,10 +426,12 @@ jobs:
           }
           DART
 
-          # Mengubah pembatas slash (/) menjadi pagar (#) agar link HTTP tidak merusak regex sed
           sed -i "s#r'\$APP_NAME'#'$APP_NAME'#g" myapp/lib/main.dart
           sed -i "s#r'\$WEB_URL'#'$WEB_URL'#g" myapp/lib/main.dart
 
+      # =========================
+      # FIX ANDROID PERMISSIONS
+      # =========================
       - name: Fix Android Permissions and App Name
         run: |
           APP_NAME="${{ github.event.inputs.app_name }}"
@@ -424,6 +441,9 @@ jobs:
           sed -i '/<manifest xmlns:android/a\    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE"\/>' $MANIFEST
           sed -i "s/android:label=\"[^\"]*\"/android:label=\"$APP_NAME\"/" $MANIFEST
 
+      # =========================
+      # SETUP NETWORK SECURITY
+      # =========================
       - name: Setup Network Security (Allow HTTP)
         run: |
           mkdir -p myapp/android/app/src/main/res/xml
@@ -441,6 +461,9 @@ jobs:
           sed -i 's/<application/<application android:networkSecurityConfig="@xml\/network_security_config"/' \
             myapp/android/app/src/main/AndroidManifest.xml
 
+      # =========================
+      # DOWNLOAD ICON
+      # =========================
       - name: Download and Sanitize Icon
         run: |
           mkdir -p myapp/assets/icon
@@ -452,7 +475,6 @@ jobs:
             "${{ github.event.inputs.icon_url }}" \
             -o myapp/assets/icon/icon_raw
 
-          # Mengubah gambar menjadi format PNG 1024x1024 yang valid
           convert myapp/assets/icon/icon_raw \
             -background transparent \
             -gravity center \
@@ -460,6 +482,70 @@ jobs:
             -extent 1024x1024 \
             myapp/assets/icon/icon.png
 
+      # =========================
+      # 🔧 FIX: Update Android SDK & Gradle (TAMBAHKAN INI!)
+      # =========================
+      - name: Fix Android SDK & Gradle
+        working-directory: myapp
+        run: |
+          echo "🔧 Fixing Android SDK configuration..."
+          
+          # Fix app/build.gradle
+          if [ -f "android/app/build.gradle" ]; then
+            echo "📝 Updating app/build.gradle..."
+            sed -i 's/compileSdkVersion [0-9]*/compileSdkVersion 36/g' android/app/build.gradle
+            sed -i 's/compileSdk = [0-9]*/compileSdk = 36/g' android/app/build.gradle
+            sed -i 's/targetSdkVersion [0-9]*/targetSdkVersion 36/g' android/app/build.gradle
+            sed -i 's/targetSdk = [0-9]*/targetSdk = 36/g' android/app/build.gradle
+            sed -i 's/minSdkVersion [0-9]*/minSdkVersion 21/g' android/app/build.gradle
+            sed -i 's/minSdk = [0-9]*/minSdk = 21/g' android/app/build.gradle
+            echo "✅ app/build.gradle updated!"
+          fi
+          
+          if [ -f "android/app/build.gradle.kts" ]; then
+            echo "📝 Updating app/build.gradle.kts..."
+            sed -i 's/compileSdk = [0-9]*/compileSdk = 36/g' android/app/build.gradle.kts
+            sed -i 's/targetSdk = [0-9]*/targetSdk = 36/g' android/app/build.gradle.kts
+            sed -i 's/minSdk = [0-9]*/minSdk = 21/g' android/app/build.gradle.kts
+            sed -i 's/ndkVersion = "[0-9.]*"/ndkVersion = "28.2.13676358"/g' android/app/build.gradle.kts
+            echo "✅ app/build.gradle.kts updated!"
+          fi
+          
+          # Fix project build.gradle (AGP)
+          if [ -f "android/build.gradle" ]; then
+            echo "📝 Updating project build.gradle..."
+            sed -i 's/com.android.tools.build:gradle:[0-9.]*/com.android.tools.build:gradle:8.9.1/g' android/build.gradle
+            sed -i 's/classpath "com.android.tools.build:gradle:[0-9.]*"/classpath "com.android.tools.build:gradle:8.9.1"/g' android/build.gradle
+            sed -i 's/ext.kotlin_version = "[0-9.]*"/ext.kotlin_version = "1.9.0"/g' android/build.gradle
+            echo "✅ project build.gradle updated!"
+          fi
+          
+          if [ -f "android/build.gradle.kts" ]; then
+            echo "📝 Updating project build.gradle.kts..."
+            sed -i 's/id("com.android.application") version "[0-9.]*"/id("com.android.application") version "8.9.1"/g' android/build.gradle.kts
+            sed -i 's/classpath "com.android.tools.build:gradle:[0-9.]*"/classpath "com.android.tools.build:gradle:8.9.1"/g' android/build.gradle.kts
+            echo "✅ project build.gradle.kts updated!"
+          fi
+          
+          # Fix gradle-wrapper.properties
+          if [ -f "android/gradle/wrapper/gradle-wrapper.properties" ]; then
+            echo "📝 Updating gradle-wrapper.properties..."
+            sed -i 's/gradle-[0-9.]*-all.zip/gradle-8.7-all.zip/g' android/gradle/wrapper/gradle-wrapper.properties
+            echo "✅ gradle-wrapper.properties updated!"
+          fi
+          
+          echo ""
+          echo "📊 Updated config:"
+          if [ -f "android/app/build.gradle" ]; then
+            grep -E "compileSdk|targetSdk|minSdk" android/app/build.gradle || true
+          fi
+          if [ -f "android/app/build.gradle.kts" ]; then
+            grep -E "compileSdk|targetSdk|minSdk" android/app/build.gradle.kts || true
+          fi
+
+      # =========================
+      # WRITE LAUNCHER ICONS CONFIG
+      # =========================
       - name: Write launcher icons config
         run: |
           cat > myapp/flutter_launcher_icons.yaml << 'EOF'
@@ -470,16 +556,25 @@ jobs:
             min_sdk_android: 21
           EOF
 
+      # =========================
+      # GENERATE ICONS
+      # =========================
       - name: Generate Icons
         run: |
           cd myapp
           dart run flutter_launcher_icons -f flutter_launcher_icons.yaml
 
+      # =========================
+      # BUILD APK
+      # =========================
       - name: Build APK
         run: |
           cd myapp
           flutter build apk --release
 
+      # =========================
+      # UPLOAD APK
+      # =========================
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
