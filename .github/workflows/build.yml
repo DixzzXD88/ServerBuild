@@ -106,13 +106,13 @@ jobs:
           echo "PROJECT_DIR=$PROJECT_DIR" >> $GITHUB_ENV
 
       # =========================
-      # JAVA
+      # JAVA (UPDATE: pake Java 21)
       # =========================
       - name: Setup Java
         uses: actions/setup-java@v4
         with:
           distribution: "temurin"
-          java-version: "17"
+          java-version: "21"  # ← UPDATE dari 17 ke 21
 
       # =========================
       # FLUTTER
@@ -125,8 +125,99 @@ jobs:
           cache: true
 
       # ==========================================================
+      # 🔧 FIX: Update Android SDK & AGP (TAMBAHKAN INI!)
+      # ==========================================================
+      - name: Fix Android SDK & Gradle
+        working-directory: ${{ env.PROJECT_DIR }}
+        run: |
+          echo "🔧 Fixing Android SDK configuration..."
+          
+          # ==========================================
+          # FIX 1: Update app/build.gradle
+          # ==========================================
+          if [ -f "android/app/build.gradle" ]; then
+            echo "📝 Updating app/build.gradle..."
+            
+            # Update compileSdkVersion
+            sed -i 's/compileSdkVersion [0-9]*/compileSdkVersion 36/g' android/app/build.gradle
+            sed -i 's/compileSdk = [0-9]*/compileSdk = 36/g' android/app/build.gradle
+            
+            # Update targetSdkVersion
+            sed -i 's/targetSdkVersion [0-9]*/targetSdkVersion 36/g' android/app/build.gradle
+            sed -i 's/targetSdk = [0-9]*/targetSdk = 36/g' android/app/build.gradle
+            
+            # Update minSdkVersion (jaga-jaga)
+            sed -i 's/minSdkVersion [0-9]*/minSdkVersion 21/g' android/app/build.gradle
+            sed -i 's/minSdk = [0-9]*/minSdk = 21/g' android/app/build.gradle
+            
+            echo "✅ app/build.gradle updated!"
+          fi
+          
+          # ==========================================
+          # FIX 2: Update app/build.gradle.kts
+          # ==========================================
+          if [ -f "android/app/build.gradle.kts" ]; then
+            echo "📝 Updating app/build.gradle.kts..."
+            
+            sed -i 's/compileSdk = [0-9]*/compileSdk = 36/g' android/app/build.gradle.kts
+            sed -i 's/targetSdk = [0-9]*/targetSdk = 36/g' android/app/build.gradle.kts
+            sed -i 's/minSdk = [0-9]*/minSdk = 21/g' android/app/build.gradle.kts
+            sed -i 's/ndkVersion = "[0-9.]*"/ndkVersion = "28.2.13676358"/g' android/app/build.gradle.kts
+            
+            echo "✅ app/build.gradle.kts updated!"
+          fi
+          
+          # ==========================================
+          # FIX 3: Update project build.gradle (AGP)
+          # ==========================================
+          if [ -f "android/build.gradle" ]; then
+            echo "📝 Updating project build.gradle..."
+            
+            # Update Android Gradle Plugin
+            sed -i 's/com.android.tools.build:gradle:[0-9.]*/com.android.tools.build:gradle:8.9.1/g' android/build.gradle
+            sed -i 's/classpath "com.android.tools.build:gradle:[0-9.]*"/classpath "com.android.tools.build:gradle:8.9.1"/g' android/build.gradle
+            
+            # Update kotlin version
+            sed -i 's/ext.kotlin_version = "[0-9.]*"/ext.kotlin_version = "1.9.0"/g' android/build.gradle
+            
+            echo "✅ project build.gradle updated!"
+          fi
+          
+          # ==========================================
+          # FIX 4: Update project build.gradle.kts
+          # ==========================================
+          if [ -f "android/build.gradle.kts" ]; then
+            echo "📝 Updating project build.gradle.kts..."
+            
+            sed -i 's/id("com.android.application") version "[0-9.]*"/id("com.android.application") version "8.9.1"/g' android/build.gradle.kts
+            sed -i 's/classpath "com.android.tools.build:gradle:[0-9.]*"/classpath "com.android.tools.build:gradle:8.9.1"/g' android/build.gradle.kts
+            
+            echo "✅ project build.gradle.kts updated!"
+          fi
+          
+          # ==========================================
+          # FIX 5: Update gradle-wrapper.properties
+          # ==========================================
+          if [ -f "android/gradle/wrapper/gradle-wrapper.properties" ]; then
+            echo "📝 Updating gradle-wrapper.properties..."
+            sed -i 's/gradle-[0-9.]*-all.zip/gradle-8.7-all.zip/g' android/gradle/wrapper/gradle-wrapper.properties
+            echo "✅ gradle-wrapper.properties updated!"
+          fi
+          
+          echo ""
+          echo "📊 Updated config:"
+          if [ -f "android/app/build.gradle" ]; then
+            grep -E "compileSdk|targetSdk|minSdk" android/app/build.gradle || true
+          fi
+          if [ -f "android/app/build.gradle.kts" ]; then
+            grep -E "compileSdk|targetSdk|minSdk" android/app/build.gradle.kts || true
+          fi
+          if [ -f "android/build.gradle" ]; then
+            grep -E "gradle:[0-9]" android/build.gradle || true
+          fi
+
+      # ==========================================================
       # 🔍 TAHAP ANALYZE — STEP 1: Jalankan & cetak hasil
-      # (Dipisah dari exit 1 biar log tidak ter-truncate)
       # ==========================================================
       - name: Analyze Project Code
         working-directory: ${{ env.PROJECT_DIR }}
@@ -153,7 +244,6 @@ jobs:
 
       # ==========================================================
       # 🔍 TAHAP ANALYZE — STEP 2: Stop workflow jika only_analyze
-      # (Dipisah biar log step di atas sudah ter-commit ke GitHub)
       # ==========================================================
       - name: Stop if Analyze Only
         if: ${{ github.event.inputs.only_analyze == 'true' }}
@@ -175,7 +265,7 @@ jobs:
         run: |
           echo "=== Running flutter pub get ==="
           if [ -f "pubspec.yaml" ]; then
-            timeout 120s flutter pub get || echo "⚠️ Gagal download package karena network server, coba lanjut aja..."
+            flutter pub get || echo "⚠️ Gagal download package, coba lanjut aja..."
           else
             echo "☕ Bukan project Flutter standar, skip pub get!"
           fi
