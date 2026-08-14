@@ -201,6 +201,7 @@ jobs:
           if [ -f "android/gradle/wrapper/gradle-wrapper.properties" ]; then
             echo "📝 Updating gradle-wrapper.properties..."
             sed -i 's/gradle-[0-9.]*-all.zip/gradle-8.9-all.zip/g' android/gradle/wrapper/gradle-wrapper.properties
+            sed -i 's/gradle-[0-9.]*-bin.zip/gradle-8.9-bin.zip/g' android/gradle/wrapper/gradle-wrapper.properties
             echo "✅ gradle-wrapper.properties updated!"
           fi
           
