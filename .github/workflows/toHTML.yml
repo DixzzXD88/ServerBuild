@@ -1,0 +1,42 @@
+name: dart to html
+
+on:
+  workflow_dispatch:
+    inputs:
+      dart_file:
+        description: "Tempelkan kode Dart kamu di sini"
+        required: true
+        type: string
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Create project structure
+        run: |
+          flutter create --platforms=web temp_project
+          cd temp_project
+          rm -rf lib/
+          mkdir lib
+
+      - name: Write Dart file
+        run: |
+          cd temp_project/lib
+          echo "${{ inputs.dart_file }}" > main.dart
+
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.22.2'
+
+      - name: Build Web
+        run: |
+          cd temp_project
+          flutter pub get
+          # Tambahkan dependencies yang dibutuhkan
+          flutter pub add http url_launcher shared_preferences device_info_plus
+          flutter build web --release
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: web-build
+          path: temp_project/build/web
